@@ -10,39 +10,39 @@ import scala.util.{Try, Success, Failure}
 import ExecutionContext.Implicits.global
 
 
-object Spokeman extends App {
+trait FutureWork {
+
+  case class FutureResult[T,U](value:T, result:Try[U])
 
   implicit val httpClient = new ApacheHttpClient
 
   def wrapWithTry[T] = (f:Future[T]) => f.map(Success[T]).recover { case x:Throwable => Failure(x) }
 
-  def urlToFutureResponse = (url:URL) => GET(url).apply
+  def futureList[T,U](elements:Seq[T], t: T => Future[U])(duration: => Duration):Either[Throwable, Seq[FutureResult[T, U]]] = {
 
-  def tryableFuture:URL => Future[Try[HttpResponse]] = wrapWithTry[HttpResponse] compose urlToFutureResponse
-
-  def futureList(urlSeq:Seq[String]) {
-    val urls = urlSeq map (new URL(_))
-
-    val f = Future.traverse(urls)(url => for {
-      tryWrapped <- tryableFuture(url)
-    } yield (url, tryWrapped))
-
-    val parted = f.map(_.partition(x => x._2.isSuccess))
+    val f = Future.traverse(elements)(element => for {
+      tryWrapped <- wrapWithTry(t(element))
+    } yield FutureResult(element, tryWrapped))
 
     try {
-      val result = Await.result(parted, 5 minutes)
-      println("success: " + result._1.map(x => (x._1, x._2.map(r => r.code))))
-      println("failure: " + result._2)
+      Right(Await.result(f, duration))
     } catch {
-      case x:Throwable => println("Error! " + x.getMessage)
+      case x:Throwable => Left(x)
     }
   }
+}
+object Spokeman extends FutureWork with App {
 
-  futureList(Seq("http://iys.org.au",
-                 "http://1uniqueimprints.com",
-                 "http://azuritepsychotherapy.com.au",
-                 "http://iys2.org.au",
-                 "http://github.com",
-                 "http://azuritepsychotherapy.com"))
+  val resultsE = futureList[String, HttpResponse](Seq("http://iys.org.au",
+                                 "http://1uniqueimprints.com",
+                                 "http://azuritepsychotherapy.com.au",
+                                 "http://iys2.org.au",
+                                 "http://github.com",
+                                 "http://azuritepsychotherapy.com"), u => GET(new URL(u)).apply)(5 minutes)
 
+  resultsE.fold(x => println("Error: " + x.getMessage), results => {
+    val (success, failure) = results.partition(x => x.result.isSuccess)
+    println("success: " + success.map(x => "%s -> %s".format(x.value, x.result.map(_.code))))
+    println("failure: " + failure.map(x => "%s -> %s".format(x.value, x.result)))
+  })
 }
