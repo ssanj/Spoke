@@ -1,4 +1,4 @@
-name := "Spoke"
+name := "spoke"
 
 version := "1.0"
 
