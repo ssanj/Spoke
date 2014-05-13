@@ -30,10 +30,8 @@ object Spoke extends App {
     override def isInError = true
   }
 
-  def printLinks(rootNode:TagNode) {
-    val elements = getElementByType(rootNode, Seq("a", "link", "img", "script")).
-                    map(nodeToElement)
-
+  def printLinks(rootNode:TagNode, url:String) {
+    val elements = getElementByType(rootNode, Seq("a", "link", "img", "script")).map(nodeToElement(url))
     val (valid, skipped, error) = parseHtml(elements)
     
     Seq("Checked", "Skipped", "In Error").zip(Seq(valid, skipped, error)).foreach { k =>
@@ -52,8 +50,7 @@ object Spoke extends App {
     elementTypes.flatMap(e => root.getElementsByName(e, true).toSeq)
   }
 
-
-  def nodeToElement(tagNode:TagNode):HtmlElement = {
+  def nodeToElement(url:String)(tagNode:TagNode):HtmlElement = {
     import scala.collection.convert.Wrappers._
 
     implicit val attribs = JMapWrapper(tagNode.getAttributes).toMap
@@ -70,6 +67,19 @@ object Spoke extends App {
 
       case "img" => createHtmlElement("src", Image(attribs.get("alt"), _), s"Could not find src for Img tag: [$tagNode]")
     }
+  }
+
+  def getAbsoluteUrl(domain:String, link:String): String = {
+
+    if (domain.matches("^(http|https)://.*")) {
+      if (!link.matches("^(http|https)://.*")) { //relative
+        if (domain.endsWith("/")) {
+          if (link.startsWith("/")) domain + link.substring(1) else domain + link
+        } else {
+          if (link.startsWith("/")) domain + link else domain + "/" + link
+        }
+      } else link //already absolute
+    } else link //wrong protocol
   }
 
   def createHtmlElement(key:String, block:(String) => HtmlElement, reason:String, errorHandler:String => HtmlElement = InError)(implicit attributes:Map[String, String]): HtmlElement = {
@@ -91,7 +101,7 @@ object Spoke extends App {
   println(s"Retrieving links for: $url")
 
   val startTime = System.currentTimeMillis
-  printLinks(getHtmlCleanFor(url))
+  printLinks(getHtmlCleanFor(url), url)
   println("time taken: %s ms".format(System.currentTimeMillis - startTime))
 
 }
