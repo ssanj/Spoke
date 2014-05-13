@@ -4,11 +4,11 @@ import org.htmlcleaner.{TagNode, HtmlCleaner}
 /*
  *
  *  1. create absolute urls for all src elements by appending domain
- *  4. Thread this bad boy -> Akka or Actors
- *  5. remove dupes
+ *  2. remove dupes
  *
  */
-object Spoke extends App {
+
+trait Elements {
 
   sealed abstract class HtmlElement {
     def isInError = false
@@ -30,27 +30,37 @@ object Spoke extends App {
     override def isInError = true
   }
 
-  def printLinks(rootNode:TagNode, url:String) {
-    val elements = getElementByType(rootNode, Seq("a", "link", "img", "script")).map(nodeToElement(url))
-    val (valid, skipped, error) = parseHtml(elements)
-    
+  final case class ElementSummary(valid:Seq[HtmlElement], skipped:Seq[HtmlElement], failed:Seq[HtmlElement])
+
+  def getElementSummary( url:String): ElementSummary = {
+    val elements = getElementByType(getRootNode(url), Seq("a", "link", "img", "script")).map(nodeToElement(url))
+    parseHtml(elements)
+  }
+
+  def printLinks(elementSummary:ElementSummary) {
+    val ElementSummary(valid, skipped, error) = elementSummary
+
     Seq("Checked", "Skipped", "In Error").zip(Seq(valid, skipped, error)).foreach { k =>
       println("--- %s ---".format(k._1))
       k._2.foreach(println)
     }
   }
-  
-  def parseHtml(htmlElements:Seq[HtmlElement]): (Seq[HtmlElement], Seq[HtmlElement], Seq[HtmlElement]) = {
-    val (success, error) = htmlElements.partition(!_.isInError)
-    val (valid, skipped) = success.partition(!_.isSkipped)
-    (valid, skipped, error)
+
+  private def booleanToOption[A](f:A => Boolean, value:A): Option[A] = {
+    if (f(value)) Some(value) else None
   }
 
-  def getElementByType(root:TagNode, elementTypes:Seq[String]):Seq[TagNode] = {
+  private def parseHtml(htmlElements:Seq[HtmlElement]): ElementSummary = {
+    val (success, error) = htmlElements.partition(!_.isInError)
+    val (valid, skipped) = success.partition(!_.isSkipped)
+    ElementSummary(valid, skipped, error)
+  }
+
+  private def getElementByType(root:TagNode, elementTypes:Seq[String]):Seq[TagNode] = {
     elementTypes.flatMap(e => root.getElementsByName(e, true).toSeq)
   }
 
-  def nodeToElement(url:String)(tagNode:TagNode):HtmlElement = {
+  private def nodeToElement(url:String)(tagNode:TagNode):HtmlElement = {
     import scala.collection.convert.Wrappers._
 
     implicit val attribs = JMapWrapper(tagNode.getAttributes).toMap
@@ -69,7 +79,7 @@ object Spoke extends App {
     }
   }
 
-  def getAbsoluteUrl(domain:String, link:String): String = {
+  private def getAbsoluteUrl(domain:String, link:String): String = {
 
     if (domain.matches("^(http|https)://.*")) {
       if (!link.matches("^(http|https)://.*")) { //relative
@@ -82,26 +92,28 @@ object Spoke extends App {
     } else link //wrong protocol
   }
 
-  def createHtmlElement(key:String, block:(String) => HtmlElement, reason:String, errorHandler:String => HtmlElement = InError)(implicit attributes:Map[String, String]): HtmlElement = {
+  private def createHtmlElement(key:String, block:(String) => HtmlElement, reason:String, errorHandler:String => HtmlElement = InError)(implicit attributes:Map[String, String]): HtmlElement = {
     attributes.get(key).map { k =>
       block(k)
     }.getOrElse(errorHandler(reason))
   }
 
-  def booleanToOption[A](f:A => Boolean, value:A): Option[A] = {
-    if (f(value)) Some(value) else None
-  }
-
-  def getHtmlCleanFor(url:String):TagNode = {
+  private def getRootNode(url:String):TagNode = {
     val cleaner = new HtmlCleaner
     cleaner.clean(new URL(url))
   }
+}
+
+object Spoke extends Elements with App {
 
   val url = "http://iys.org.au"
   println(s"Retrieving links for: $url")
 
   val startTime = System.currentTimeMillis
-  printLinks(getHtmlCleanFor(url), url)
+
+  val elementSummary = getElementSummary(url)
+
+  printLinks(elementSummary)
   println("time taken: %s ms".format(System.currentTimeMillis - startTime))
 
 }

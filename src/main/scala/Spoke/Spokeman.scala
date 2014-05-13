@@ -14,16 +14,20 @@ object Spokeman extends App {
 
   implicit val httpClient = new ApacheHttpClient
 
-  def futureToFutureTry[T](f: Future[T]): Future[Try[T]] = f.map(Success[T]).recover { case x:Throwable => Failure(x) }
+  def wrapWithTry[T] = (f:Future[T]) => f.map(Success[T]).recover { case x:Throwable => Failure(x) }
+
+  def urlToFutureResponse = (url:URL) => GET(url).apply
+
+  def tryableFuture:URL => Future[Try[HttpResponse]] = wrapWithTry[HttpResponse] compose urlToFutureResponse
 
   def futureList(urlSeq:Seq[String]) {
     val urls = urlSeq map (new URL(_))
 
-    val f:Future[Seq[(URL, Try[HttpResponse])]] = Future.traverse(urls)(url => for {
-      tryWrapped <- futureToFutureTry(GET(url).apply)
+    val f = Future.traverse(urls)(url => for {
+      tryWrapped <- tryableFuture(url)
     } yield (url, tryWrapped))
 
-    val parted:Future[(Seq[(URL, Try[HttpResponse])], Seq[(URL, Try[HttpResponse])])] = f.map(_.partition(x => x._2.isSuccess))
+    val parted = f.map(_.partition(x => x._2.isSuccess))
 
     try {
       val result = Await.result(parted, 5 minutes)
