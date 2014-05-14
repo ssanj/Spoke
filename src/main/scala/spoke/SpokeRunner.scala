@@ -14,13 +14,13 @@ object SpokeRunner extends App with Spoke {
 
   implicit val httpClient = new ApacheHttpClient
 
-  //if url is invalid will blow up the full stack.
+  //TODO:if url is invalid will blow up the full stack.
   def createRequest(url:String):Future[HttpResponseCode] =
     HEAD(new URL(url)).apply.
       map(r =>  r.code).
       andThen { case Success(_) =>  println(s"[$url] completed") }
 
-  //Make this Option[Future[(String,HttpResponseCode)]
+  //TODO:Make this Option[Future[(String,HttpResponseCode)]
   def getFuture(element:HtmlElement):Future[HttpResponseCode] = element match {
     case Anchor(_, link) => createRequest(link)
     case Stylesheet(link) => createRequest(link)
@@ -67,9 +67,9 @@ object SpokeRunner extends App with Spoke {
     def underline(length:Int)(ch:String = "-"): String = Seq.fill(length)(ch).mkString
   }
 
-  //This leads to a 100% of "statusOther" because we don't use the domain from the URL supplied correctly. Fix.
-  val url = "http://iys.org.au/contact.html"
+  val url = "http://iys.org.au/events.html"
 
+  //TODO:do this in a loop for multiple urls.
   val heading = s"Spoking $url"
   println(heading)
   import Printer._

@@ -24,7 +24,7 @@ trait Elements {
 
   case class Image(name:Option[String], link:String) extends HtmlElement
 
-  //Skipped and InError are not really HtmlElements and should model the Success or Failure of a parse instead.
+  //TODO:Skipped and InError are not really HtmlElements and should model the Success or Failure of a parse instead.
   case class Skipped(reason:String) extends HtmlElement {
     override def isSkipped = true
   }
@@ -35,7 +35,7 @@ trait Elements {
 
   case class ElementSummary(valid:Seq[HtmlElement], skipped:Seq[HtmlElement], failed:Seq[HtmlElement])
 
-  def getElementSummary( url:String): ElementSummary = {
+  def getElementSummary(url:String): ElementSummary = {
     val elements = getElementByType(getRootNode(url), Seq("a", "link", "img", "script")).map(nodeToElement(url))
     parseHtml(elements)
   }
@@ -68,31 +68,34 @@ trait Elements {
 
     implicit val attribs = JMapWrapper(tagNode.getAttributes).toMap
 
+    val domain= getDomain(url)
+
     tagNode.getName match {
-      case "a" => createHtmlElement("href", wrapUrl(url, href => {
-        if (!href.matches("^(http|https)://.*")) Skipped("non-http(s): anchor link [%s -> %s]".format(tagNode.getText, href))
+      case "a" => createHtmlElement("href", wrapUrl(domain, href => {
+        if (!href.matches("^https?://.*")) Skipped("non-http(s): anchor link [%s -> %s]".format(tagNode.getText, href))
         else Anchor(booleanToOption[String](!_.isEmpty, tagNode.getText.toString.trim), href)
       }), "Could not find href for anchor tag: [$tagName]")
 
-      case "link" => createHtmlElement("href", wrapUrl(url, Stylesheet), s"Could not find href for link tag: [$tagNode]")
+      case "link" => createHtmlElement("href", wrapUrl(domain, Stylesheet), s"Could not find href for link tag: [$tagNode]")
 
-      case "script" => createHtmlElement("src", wrapUrl(url, Script), "Could not find src for script tag", Skipped)
+      case "script" => createHtmlElement("src", wrapUrl(domain, Script), "Could not find src for script tag", Skipped)
 
-      case "img" => createHtmlElement("src", wrapUrl(url, Image(attribs.get("alt"), _)), s"Could not find src for Img tag: [$tagNode]")
+      case "img" => createHtmlElement("src", wrapUrl(domain, Image(attribs.get("alt"), _)), s"Could not find src for Img tag: [$tagNode]")
     }
+  }
+
+  private def getDomain(url:String) = {
+    val u = new URL(url)
+    s"${u.getProtocol}://${u.getHost}${ if (u.getPort == -1) "" else u.getPort }"
   }
 
   private def wrapUrl(domain:String, block:(String) => HtmlElement) = (link:String) => block(getAbsoluteUrl(domain, link))
 
   private def getAbsoluteUrl(domain:String, link:String): String = {
 
-      if (!link.matches("^(http|https)://.*") && !link.matches("^.*:.*")) { //relative
-        if (domain.endsWith("/")) {
-          if (link.startsWith("/")) domain + link.substring(1) else domain + link
-        } else {
-          if (link.startsWith("/")) domain + link else domain + "/" + link
-        }
-      } else link //already absolute
+      if (!link.matches("^https?://.*") && !link.matches("^.*:.*")) { //relative
+         if (link.startsWith("/")) domain + link else domain + "/" + link
+      } else link //already absolute or not http(s).
   }
 
   private def createHtmlElement(key:String, block:(String) => HtmlElement, reason:String, errorHandler:String => HtmlElement = InError)(implicit attributes:Map[String, String]): HtmlElement = {
