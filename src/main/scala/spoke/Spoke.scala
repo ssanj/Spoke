@@ -8,10 +8,10 @@ import com.stackmob.newman.response.HttpResponseCode
 import java.net.URL
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.util.Success
+import scala.util.{Failure, Success}
 import com.stackmob.newman.response.HttpResponseCode.Ok
 
-object Spoke extends App with Elements with FutureWork {
+object Spoke extends App with Elements with FutureWork with Report {
 
   implicit val httpClient = new ApacheHttpClient
 
@@ -33,17 +33,39 @@ object Spoke extends App with Elements with FutureWork {
     case x => sys.error("Invalid request type: %s".format(x))
   }
 
-  val summary = getElementSummary("http://iys.org.au")
-  val resultsE = futureList[HtmlElement, (String, HttpResponseCode)](summary.valid, getFuture)((10 * summary.valid.length) seconds)
-  resultsE.fold(x => println("Error: " + x.getMessage), results => {
-    val (success, failure) = results.partition(x => x.result.isSuccess)
-    val (rOk, rOther) = success.partition {
-      case FutureResult(_, Success((_, Ok))) => true
-      case _ => false
+  def toLinkReport[R](results:Seq[FutureResult[HtmlElement, R]]):Seq[LinkReport[R]] = {
+    results.foldLeft(Seq.empty[LinkReport[R]]) {
+      case (acc, FutureResult(el, Success(value))) => LinkReport(el, value) +: acc
+      case (acc, _) => acc
     }
+  }
 
-    println("success (200): " + rOk.map(x => "%s -> %s".format(x.value, x.result.map(_._2.code))))
-    println("success (other): " + rOther.map(x => "%s -> %s".format(x.value, x.result.map(_._2.code))))
-    println("failure: " + failure.map(x => "%s -> %s".format(x.value, x.result)))
-  })
+  def toLinkError[R](results:Seq[FutureResult[HtmlElement, R]]):Seq[LinkError] = {
+    results.foldLeft(Seq.empty[LinkError]) {
+      case (acc, FutureResult(el, Failure(ex))) => LinkError(el, ex) +: acc
+      case (acc, _) => acc
+    }
+  }
+
+  def check[R](url:String, f:HtmlElement => Future[R], secondsPerUrl:Int = 10): Either[Throwable, PageReport[R]] = {
+    val summary = getElementSummary(url)
+
+    val resultsE = futureList[HtmlElement, R](summary.valid, f)((secondsPerUrl * summary.valid.length) seconds)
+    resultsE.fold(x => Left(x), results => {
+      val (success, failures) = results.partition(x => x.result.isSuccess)
+      val (rOk, rOther) = success.partition {
+        case FutureResult(_, Success((_, Ok))) => true
+        case _ => false
+      }
+
+      val status200 = toLinkReport(rOk)
+      val statusOther = toLinkReport(rOther)
+      val errors = toLinkError(failures)
+
+      Right(PageReport[R](url, status200, statusOther, errors))
+    })
+  }
+
+   val result = check[(String, HttpResponseCode)]("http://iys.org.au", getFuture)
+   result.fold(ex => println(s"failed with error $ex"), report => println(report))
 }
