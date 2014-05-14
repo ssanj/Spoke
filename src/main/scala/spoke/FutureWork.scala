@@ -1,15 +1,14 @@
 package spoke
 
-import com.stackmob.newman._
-import com.stackmob.newman.dsl._
 import scala.concurrent._
 import scala.concurrent.duration._
-import java.net.URL
-import com.stackmob.newman.response.HttpResponse
-import scala.util.{Try, Success, Failure}
-import ExecutionContext.Implicits.global
+import scala.util.Try
+import scala.util.Failure
+import scala.util.Success
 
 trait FutureWork {
+
+  implicit lazy val ec:ExecutionContext = sys.error("Please mixin an implicit instance of ExecutionContext by overriding ec in a subclass.")
 
   case class FutureResult[T,U](value:T, result:Try[U])
 
@@ -28,19 +27,3 @@ trait FutureWork {
     }
   }
 }
-
-//object FutureWorkRunner extends FutureWork with App {
-//
-//  val resultsE = futureList[String, HttpResponse](Seq("http://iys.org.au",
-//                                 "http://1uniqueimprints.com",
-//                                 "http://azuritepsychotherapy.com.au",
-//                                 "http://iys2.org.au",
-//                                 "http://github.com",
-//                                 "http://azuritepsychotherapy.com"), u => GET(new URL(u)).apply)(5 minutes)
-//
-//  resultsE.fold(x => println("Error: " + x.getMessage), results => {
-//    val (success, failure) = results.partition(x => x.result.isSuccess)
-//    println("success: " + success.map(x => "%s -> %s".format(x.value, x.result.map(_.code))))
-//    println("failure: " + failure.map(x => "%s -> %s".format(x.value, x.result)))
-//  })
-//}

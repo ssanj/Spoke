@@ -33,7 +33,7 @@ trait Elements {
     override def isInError = true
   }
 
-  final case class ElementSummary(valid:Seq[HtmlElement], skipped:Seq[HtmlElement], failed:Seq[HtmlElement])
+  case class ElementSummary(valid:Seq[HtmlElement], skipped:Seq[HtmlElement], failed:Seq[HtmlElement])
 
   def getElementSummary( url:String): ElementSummary = {
     val elements = getElementByType(getRootNode(url), Seq("a", "link", "img", "script")).map(nodeToElement(url))
@@ -106,19 +106,4 @@ trait Elements {
     cleaner.clean(new URL(url))
   }
 }
-
-object ElementRunner extends Elements with App {
-
-  val url = "http://iys.org.au"
-  println(s"Retrieving links for: $url")
-
-  val startTime = System.currentTimeMillis
-
-  val elementSummary = getElementSummary(url)
-
-  printLinks(elementSummary)
-  println("time taken: %s ms".format(System.currentTimeMillis - startTime))
-
-}
-
 

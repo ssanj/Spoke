@@ -6,7 +6,7 @@ trait Report { this:Elements =>
   
   case class LinkError(element:HtmlElement, error:Throwable)
   
-  case class PageReport[R](url:String, status200:Seq[LinkReport[R]], statusOther:Seq[LinkReport[R]], errors:Seq[LinkError])
+  case class PageReport[R](url:String, statusSuccess:Seq[LinkReport[R]], statusOther:Seq[LinkReport[R]], errors:Seq[LinkError])
 
 }
 
