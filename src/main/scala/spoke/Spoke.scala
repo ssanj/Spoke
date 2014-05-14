@@ -15,17 +15,14 @@ object Spoke extends App with Elements with FutureWork with Report {
 
   implicit val httpClient = new ApacheHttpClient
 
-  val requestUrlHeader = "spoke.request.url"
-
   //if url is invalid will blow up the full stack.
-  def createRequest(url:String):Future[(String, HttpResponseCode)] =
-    HEAD(new URL(url)).
-      addHeaders(requestUrlHeader -> url).apply.
-        map(r =>  (url, r.code)).
-        andThen { case Success((u, _)) =>  println(s"$u completed") }
+  def createRequest(url:String):Future[HttpResponseCode] =
+    HEAD(new URL(url)).apply.
+        map(r =>  r.code).
+        andThen { case Success(_) =>  println(s"[$url] completed") }
 
   //Make this Option[Future[(String,HttpResponseCode)]
-  def getFuture(element:HtmlElement):Future[(String, HttpResponseCode)] = element match {
+  def getFuture(element:HtmlElement):Future[HttpResponseCode] = element match {
     case Anchor(_, link) => createRequest(link)
     case Stylesheet(link) => createRequest(link)
     case Script(link) => createRequest(link)
@@ -33,18 +30,12 @@ object Spoke extends App with Elements with FutureWork with Report {
     case x => sys.error("Invalid request type: %s".format(x))
   }
 
-  def toLinkReport[R](results:Seq[FutureResult[HtmlElement, R]]):Seq[LinkReport[R]] = {
-    results.foldLeft(Seq.empty[LinkReport[R]]) {
-      case (acc, FutureResult(el, Success(value))) => LinkReport(el, value) +: acc
-      case (acc, _) => acc
-    }
+  def collectLinkReports[R](results:Seq[FutureResult[HtmlElement, R]]):Seq[LinkReport[R]] = {
+    results.collect { case FutureResult(el, Success(value)) => LinkReport(el, value) }
   }
 
-  def toLinkError[R](results:Seq[FutureResult[HtmlElement, R]]):Seq[LinkError] = {
-    results.foldLeft(Seq.empty[LinkError]) {
-      case (acc, FutureResult(el, Failure(ex))) => LinkError(el, ex) +: acc
-      case (acc, _) => acc
-    }
+  def collectLinkErrors[R](results:Seq[FutureResult[HtmlElement, R]]):Seq[LinkError] = {
+    results.collect { case FutureResult(el, Failure(ex)) => LinkError(el, ex) }
   }
 
   def check[R](url:String, f:HtmlElement => Future[R], secondsPerUrl:Int = 10): Either[Throwable, PageReport[R]] = {
@@ -58,14 +49,14 @@ object Spoke extends App with Elements with FutureWork with Report {
         case _ => false
       }
 
-      val status200 = toLinkReport(rOk)
-      val statusOther = toLinkReport(rOther)
-      val errors = toLinkError(failures)
+      val status200 = collectLinkReports(rOk)
+      val statusOther = collectLinkReports(rOther)
+      val errors = collectLinkErrors(failures)
 
       Right(PageReport[R](url, status200, statusOther, errors))
     })
   }
 
-   val result = check[(String, HttpResponseCode)]("http://iys.org.au", getFuture)
+   val result = check[HttpResponseCode]("http://iys.org.au", getFuture)
    result.fold(ex => println(s"failed with error $ex"), report => println(report))
 }

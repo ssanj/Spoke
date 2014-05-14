@@ -5,8 +5,8 @@ import org.htmlcleaner.{TagNode, HtmlCleaner}
 
 /*
  *
- *  1. create absolute urls for all src elements by appending domain
- *  2. remove dupes
+ *  1. remove dupes
+ *  2. Skipped and InError should be part of another Type.
  *
  */
 
@@ -24,6 +24,7 @@ trait Elements {
 
   case class Image(name:Option[String], link:String) extends HtmlElement
 
+  //Skipped and InError are not really HtmlElements and should model the Success or Failure of a parse instead.
   case class Skipped(reason:String) extends HtmlElement {
     override def isSkipped = true
   }
