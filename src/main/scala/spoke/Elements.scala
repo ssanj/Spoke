@@ -68,30 +68,30 @@ trait Elements {
     implicit val attribs = JMapWrapper(tagNode.getAttributes).toMap
 
     tagNode.getName match {
-      case "a" => createHtmlElement("href", href => {
-        if (href.startsWith("mailto:")) Skipped("mailto: anchor link [%s -> %s]".format(tagNode.getText, href))
+      case "a" => createHtmlElement("href", wrapUrl(url, href => {
+        if (!href.matches("^(http|https)://.*")) Skipped("non-http(s): anchor link [%s -> %s]".format(tagNode.getText, href))
         else Anchor(booleanToOption[String](!_.isEmpty, tagNode.getText.toString.trim), href)
-      }, "Could not find href for anchor tag: [$tagName]")
+      }), "Could not find href for anchor tag: [$tagName]")
 
-      case "link" => createHtmlElement("href", Stylesheet, s"Could not find href for link tag: [$tagNode]")
+      case "link" => createHtmlElement("href", wrapUrl(url, Stylesheet), s"Could not find href for link tag: [$tagNode]")
 
-      case "script" => createHtmlElement("src", Script, "Could not find src for script tag", Skipped)
+      case "script" => createHtmlElement("src", wrapUrl(url, Script), "Could not find src for script tag", Skipped)
 
-      case "img" => createHtmlElement("src", Image(attribs.get("alt"), _), s"Could not find src for Img tag: [$tagNode]")
+      case "img" => createHtmlElement("src", wrapUrl(url, Image(attribs.get("alt"), _)), s"Could not find src for Img tag: [$tagNode]")
     }
   }
 
+  private def wrapUrl(domain:String, block:(String) => HtmlElement) = (link:String) => block(getAbsoluteUrl(domain, link))
+
   private def getAbsoluteUrl(domain:String, link:String): String = {
 
-    if (domain.matches("^(http|https)://.*")) {
-      if (!link.matches("^(http|https)://.*")) { //relative
+      if (!link.matches("^(http|https)://.*") && !link.matches("^.*:.*")) { //relative
         if (domain.endsWith("/")) {
           if (link.startsWith("/")) domain + link.substring(1) else domain + link
         } else {
           if (link.startsWith("/")) domain + link else domain + "/" + link
         }
       } else link //already absolute
-    } else link //wrong protocol
   }
 
   private def createHtmlElement(key:String, block:(String) => HtmlElement, reason:String, errorHandler:String => HtmlElement = InError)(implicit attributes:Map[String, String]): HtmlElement = {
