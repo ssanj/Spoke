@@ -60,6 +60,8 @@ object SpokeRunner extends App with Spoke {
           println(s"${e.element} -> ${e.error.getMessage}")
         }
       }
+
+      println(underline(40)("="))
     }
 
     def underlineH(heading:String)(ch:String = "-"): String = underline(heading.length)(ch)
@@ -67,14 +69,20 @@ object SpokeRunner extends App with Spoke {
     def underline(length:Int)(ch:String = "-"): String = Seq.fill(length)(ch).mkString
   }
 
-  val url = "http://iys.org.au/events.html"
-
-  //TODO:do this in a loop for multiple urls.
-  val heading = s"Spoking $url"
-  println(heading)
+  val urls = Seq("http://iys.org.au", "http://iys.org.au/events.html", "http://iys.org.au/contact.html")
   import Printer._
-  println(underlineH(heading)("_"))
+  
+  private def checkUrl(url:String):Either[Throwable, PageReport[HttpResponseCode]] = {
+    val heading = s"Spoking $url"
+    println()
+    println(heading)
+    println(underlineH(heading)("_"))
+    check[HttpResponseCode](url, getFuture, _ == Ok)
+  }
+  
+  private def printResult(result:Either[Throwable, PageReport[HttpResponseCode]]) {
+    result.fold(ex => println(s"failed with error $ex"), report => printBasicReport(report))
+  }
 
-  val result = check[HttpResponseCode](url, getFuture, _ == Ok)
-  result.fold(ex => println(s"failed with error $ex"), report => printBasicReport(report))
+  urls.foreach { u => printResult(checkUrl(u)) }
 }

@@ -16,6 +16,7 @@ trait Elements {
     def isInError = false
     def isSkipped = false
   }
+
   case class Anchor(name:Option[String], link:String) extends HtmlElement
 
   case class Stylesheet(link:String) extends HtmlElement
@@ -34,6 +35,9 @@ trait Elements {
   }
 
   case class ElementSummary(valid:Seq[HtmlElement], skipped:Seq[HtmlElement], failed:Seq[HtmlElement])
+
+  val httpUrl = "^https?://.*"
+  val protocoledUrl = "^.*:.*"
 
   def getElementSummary(url:String): ElementSummary = {
     val elements = getElementByType(getRootNode(url), Seq("a", "link", "img", "script")).map(nodeToElement(url))
@@ -72,7 +76,7 @@ trait Elements {
 
     tagNode.getName match {
       case "a" => createHtmlElement("href", wrapUrl(domain, href => {
-        if (!href.matches("^https?://.*")) Skipped("non-http(s): anchor link [%s -> %s]".format(tagNode.getText, href))
+        if (!href.matches(httpUrl)) Skipped("non-http(s): anchor link [%s -> %s]".format(tagNode.getText, href))
         else Anchor(booleanToOption[String](!_.isEmpty, tagNode.getText.toString.trim), href)
       }), "Could not find href for anchor tag: [$tagName]")
 
@@ -93,7 +97,7 @@ trait Elements {
 
   private def getAbsoluteUrl(domain:String, link:String): String = {
 
-      if (!link.matches("^https?://.*") && !link.matches("^.*:.*")) { //relative
+      if (!link.matches(httpUrl) && !link.matches(protocoledUrl)) { //relative
          if (link.startsWith("/")) domain + link else domain + "/" + link
       } else link //already absolute or not http(s).
   }
