@@ -8,6 +8,7 @@ import java.net.URL
 import com.stackmob.newman.response.HttpResponseCode.Ok
 import spoke.Elements._
 import spoke.report.BasicReport
+import scala.concurrent.promise
 
 object SpokeRunner extends App with Spoke {
 
@@ -15,10 +16,12 @@ object SpokeRunner extends App with Spoke {
 
   implicit val httpClient = new ApacheHttpClient
 
-  //TODO:if url is invalid will blow up the full stack.
   def createRequest(url:String):Future[HttpResponseCode] =
-    HEAD(new URL(url)).apply.
-      map(r =>  r.code)
+    try {
+      HEAD(new URL(url)).apply.map(r =>  r.code)
+    } catch {
+      case x:Throwable => promise[HttpResponseCode]().failure(x).future
+    }
 
   //TODO:Make this Option[Future[(String,HttpResponseCode)]
   def getFuture(element:HtmlElement):Future[HttpResponseCode] = element match {
@@ -29,7 +32,7 @@ object SpokeRunner extends App with Spoke {
     case x => sys.error("Invalid request type: %s".format(x))
   }
 
-  val urls = Seq("http://iys.org.au", "http://iys.org.au/events.html", "http://iys.org.au/contact.html")
-
-  BasicReport.print(checks[HttpResponseCode](urls, getFuture, _ == Ok))
+//  val urls = Seq("http://iys.org.au", "http://iys.org.au/events.html", "http://iys.org.au/contact.html")
+  val urls = Seq("http://www.baysidetidybags.com.au/", "http://www.baysidetidybags.com.au/services/", "http://www.baysidetidybags.com.au/contact-us/")
+  BasicReport.printWithErrors(checks[HttpResponseCode](urls, getFuture, _ == Ok))
 }
