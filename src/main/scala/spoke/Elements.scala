@@ -38,6 +38,7 @@ object Elements {
 
   val httpUrl = "^https?://.*"
   val protocoledUrl = "^.*:.*"
+  val httpUnspecifiedUrl = "^//.*"
 
   def getElementSummary(url:String): ElementSummary = {
     val elements = getElementByType(getRootNode(url), Seq("a", "link", "img", "script")).map(nodeToElement(url))
@@ -88,8 +89,11 @@ object Elements {
 
   private def getAbsoluteUrl(domain:String, link:String): String = {
 
-      if (!link.matches(httpUrl) && !link.matches(protocoledUrl)) { //relative
-         if (link.startsWith("/")) domain + link else domain + "/" + link
+      if (link.matches(httpUnspecifiedUrl) || (!link.matches(httpUrl) && !link.matches(protocoledUrl))) { //relative
+        if (link.matches(httpUnspecifiedUrl)) {
+          //some weird urls from Squarespace start with // which simply resolves to http:// in the browser. Do the same.
+          s"http:$link"
+        } else if (link.startsWith("/")) domain + link else domain + "/" + link
       } else link //already absolute or not http(s).
   }
 
