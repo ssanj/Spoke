@@ -10,7 +10,7 @@ import org.htmlcleaner.{TagNode, HtmlCleaner}
  *
  */
 
-trait Elements {
+object Elements {
 
   sealed abstract class HtmlElement {
     def isInError = false
@@ -42,15 +42,6 @@ trait Elements {
   def getElementSummary(url:String): ElementSummary = {
     val elements = getElementByType(getRootNode(url), Seq("a", "link", "img", "script")).map(nodeToElement(url))
     parseHtml(elements)
-  }
-
-  def printLinks(elementSummary:ElementSummary) {
-    val ElementSummary(valid, skipped, error) = elementSummary
-
-    Seq("Checked", "Skipped", "In Error").zip(Seq(valid, skipped, error)).foreach { k =>
-      println("--- %s ---".format(k._1))
-      k._2.foreach(println)
-    }
   }
 
   private def booleanToOption[A](f:A => Boolean, value:A): Option[A] = {

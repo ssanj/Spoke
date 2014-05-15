@@ -5,8 +5,10 @@ import scala.concurrent.duration._
 import scala.concurrent.Future
 
 import scala.util.{Failure, Success}
+import spoke.Elements.{HtmlElement, getElementSummary}
+import spoke.Report.{PageReport, LinkError, LinkReport}
 
-trait Spoke extends Elements with FutureWork with Report {
+trait Spoke extends FutureWork {
 
   private def collectLinkReports[R](results:Seq[FutureResult[HtmlElement, R]]):Seq[LinkReport[R]] = {
     results.collect { case FutureResult(el, Success(value)) => LinkReport(el, value) }
@@ -29,9 +31,10 @@ trait Spoke extends Elements with FutureWork with Report {
    *         @see PageReport
    */
   def check[R](url:String, f:HtmlElement => Future[R], pred:R => Boolean, secondsPerUrl:Int = 10): Either[Throwable, PageReport[R]] = {
+    println(s"processing [$url]")
     val summary = getElementSummary(url)
 
-    val resultsE = futureList[HtmlElement, R](summary.valid, f)(FiniteDuration(secondsPerUrl * summary.valid.length, SECONDS))
+    val resultsE = futureList[HtmlElement, R](summary.valid, f)(Duration(secondsPerUrl * summary.valid.length, SECONDS))
     resultsE.fold(x => Left(x), results => {
       val (success, failures) = results.partition(x => x.result.isSuccess)
       val (rOk, rOther) = success.partition {
@@ -42,7 +45,12 @@ trait Spoke extends Elements with FutureWork with Report {
       val statusOther = collectLinkReports(rOther)
       val errors = collectLinkErrors(failures)
 
+      println(s"processed [$url]")
       Right(PageReport[R](url, statusSuccess, statusOther, errors))
     })
+  }
+
+  def checks[R](urls:Seq[String], f:HtmlElement => Future[R], pred:R => Boolean, secondsPerUrl:Int = 10): Seq[Either[Throwable, PageReport[R]]] = {
+    urls.map(u => check[R](u, f, pred, secondsPerUrl))
   }
 }

@@ -1,6 +1,8 @@
 package spoke
 
-trait Report { this:Elements =>
+import spoke.Elements.HtmlElement
+
+object Report {
     
   case class LinkReport[R](element:HtmlElement, result:R)
   
