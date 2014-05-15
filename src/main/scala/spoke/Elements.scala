@@ -3,12 +3,6 @@ package spoke
 import java.net.URL
 import org.htmlcleaner.{TagNode, HtmlCleaner}
 
-/*
- *
- *  1. remove dupes
- *
- */
-
 object Elements {
 
   sealed abstract class HtmlElement
@@ -29,9 +23,9 @@ object Elements {
   val protocoledUrl = "^.*:.*"
   val httpUnspecifiedUrl = "^//.*"
 
-  def getElementSummary(url:String): ElementSummary = {
-    val elements:Seq[ParseResult] = getElementByType(getRootNode(url), Seq("a", "link", "img", "script")).map(nodeToElement(url))
-    parseHtml(elements)
+  def getElementSummary(url:String, removeDupes:Boolean): ElementSummary = {
+    val elements = getElementByType(getRootNode(url), Seq("a", "link", "img", "script")).map(nodeToElement(url))
+    parseHtml(if (removeDupes) elements.toSet.toSeq else elements)
   }
 
   private def booleanToOption[A](f:A => Boolean, value:A): Option[A] = {

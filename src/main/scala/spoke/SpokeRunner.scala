@@ -18,7 +18,7 @@ object SpokeRunner extends App with Spoke {
 
   def createRequest(url:String):Future[HttpResponseCode] =
     try {
-      HEAD(encodeURL(url)).apply.map(r =>  r.code)
+      HEAD(encodeURL(url)).apply.map(r =>  r.code).andThen { case x => println(s"$url completed") }
     } catch {
       case x:Throwable => promise[HttpResponseCode]().failure(x).future
     }
@@ -36,6 +36,6 @@ object SpokeRunner extends App with Spoke {
     new URI(u.getProtocol, u.getHost, u.getPath, u.getQuery, null).toURL
   }
 
-  val urls = Seq("http://www.baysidetidybags.com.au/", "http://www.baysidetidybags.com.au/services/", "http://www.baysidetidybags.com.au/contact-us/")
-  BasicReport.printWithErrors(checks[HttpResponseCode](urls, getFuture, _ == Ok))
+  val urls = Seq("http://iys.org.au")
+  BasicReport.printWithErrors(checks[HttpResponseCode](urls, getFuture, _ == Ok, CheckOptions(removeDupes = true)))
 }

@@ -18,23 +18,28 @@ trait Spoke extends FutureWork {
     results.collect { case FutureResult(el, Failure(ex)) => LinkError(el, ex) }
   }
 
+  case class CheckOptions(secondsPerUrl:Int = 10, removeDupes:Boolean = false)
+
   /**
    * Checks the links on the provided url
-   * @param url The page to check the links on.
+   * @param urls The pages to check the links on.
    * @param f A function that maps an HtmlElement to a Future[R]
    * @param pred A function that takes an R and returns true if it matches your criteria of success or false if not.
    *             The values that return true will be returned in PageReport.statusSuccess and the values that return
    *             false will be returned in PageReport.statusOther.
-   * @param secondsPerUrl The number of seconds to allow for each link check to complete.
+   * @param options Options to prime the checker with. A very Javascripty solution.
    * @tparam R The return type from your Future.
    * @return A PageReport object with link check information.
    *         @see PageReport
    */
-  def check[R](url:String, f:HtmlElement => Future[R], pred:R => Boolean, secondsPerUrl:Int = 10): Either[Throwable, PageReport[R]] = {
-    println(s"processing [$url]")
-    val summary = getElementSummary(url)
+  def checks[R](urls:Seq[String], f:HtmlElement => Future[R], pred:R => Boolean, options:CheckOptions = CheckOptions()):
+    Seq[Either[Throwable, PageReport[R]]] = urls.map(u => check[R](u, f, pred, options))
 
-    val resultsE = futureList[HtmlElement, R](summary.valid, f)(Duration(secondsPerUrl * summary.valid.length, SECONDS))
+  private def check[R](url:String, f:HtmlElement => Future[R], pred:R => Boolean, options:CheckOptions): Either[Throwable, PageReport[R]] = {
+    println(s"processing [$url]")
+    val summary = getElementSummary(url, options.removeDupes)
+
+    val resultsE = futureList[HtmlElement, R](summary.valid, f)(Duration(options.secondsPerUrl * summary.valid.length, SECONDS))
     resultsE.fold(x => Left(x), results => {
       val (success, failures) = results.partition(x => x.result.isSuccess)
       val (rOk, rOther) = success.partition {
@@ -48,9 +53,5 @@ trait Spoke extends FutureWork {
       println(s"processed [$url]")
       Right(PageReport[R](url, statusSuccess, statusOther, errors))
     })
-  }
-
-  def checks[R](urls:Seq[String], f:HtmlElement => Future[R], pred:R => Boolean, secondsPerUrl:Int = 10): Seq[Either[Throwable, PageReport[R]]] = {
-    urls.map(u => check[R](u, f, pred, secondsPerUrl))
   }
 }
