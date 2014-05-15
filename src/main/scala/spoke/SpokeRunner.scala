@@ -7,7 +7,7 @@ import com.stackmob.newman.dsl._
 import java.net.URL
 import com.stackmob.newman.response.HttpResponseCode.Ok
 import spoke.Elements._
-import spoke.Report._
+import spoke.report.BasicReport
 
 object SpokeRunner extends App with Spoke {
 
@@ -30,12 +30,6 @@ object SpokeRunner extends App with Spoke {
   }
 
   val urls = Seq("http://iys.org.au", "http://iys.org.au/events.html", "http://iys.org.au/contact.html")
-  import report.BasicPrinter._
 
-  private def printResult(result:Either[Throwable, PageReport[HttpResponseCode]]) {
-    result.fold(ex => println(s"failed with error $ex"), report => printBasicReport(report))
-  }
-
-  val results = checks[HttpResponseCode](urls, getFuture, _ == Ok)
-  results.foreach { printResult }
+  BasicReport.print(checks[HttpResponseCode](urls, getFuture, _ == Ok))
 }
