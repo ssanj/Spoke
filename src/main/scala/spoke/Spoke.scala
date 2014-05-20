@@ -65,23 +65,25 @@ trait Spoke extends FutureWork {
   def checkSite[R](url:String, f:HtmlElement => Future[R], pred:R => Boolean, options:CheckOptions): Seq[FailureOrReport[R]] = {
 
     def doCheck(pageCheck:PageCheck[R]):PageCheck[R] = {
-      println(s"--- checkedPages:${pageCheck.visited}, unCheckedPages:${pageCheck.unvisited} ---")
+      println(s"--- results:${pageCheck.results.collect{ case Right(PageReport(x, _, _, _)) => x }} checkedPages:${pageCheck.visited}, unCheckedPages:${pageCheck.unvisited} ---")
       if (pageCheck.unvisited.isEmpty) {
         pageCheck
       } else {
         val results:Set[FailureOrReport[R]] = pageCheck.unvisited.map(check[R](_, f, pred, options))
-        results.foldLeft(pageCheck) { (acc, fr) =>
+        val reduced:PageCheck[R] = results.foldLeft(pageCheck) { (acc, fr) =>
           fr.fold(x =>  acc.copy(results = results + Left(x)) , report => {
             if (!acc.visited.contains(report.url)) {
               val subPages = findSubPages(report)
               val visitedPages = acc.visited + report.url
               val unvisitedPages = subPages.filterNot(visitedPages.contains)
-              doCheck(PageCheck(pageCheck.results + Right(report), visitedPages, unvisitedPages))
+              PageCheck(acc.results + Right(report), visitedPages, unvisitedPages)
             } else {
-              pageCheck
+              acc.copy(results = results + Right(report))
             }
           })
         }
+
+        if (reduced.unvisited.isEmpty) reduced else doCheck(reduced)
       }
     }
 
@@ -96,7 +98,7 @@ trait Spoke extends FutureWork {
         val linkUrl = new URL(link)
         val noExtensionRegx = "^.+\\.[^.]*$"
 
-        reportUrl.getHost == linkUrl.getHost &&
+        reportUrl.getHost == linkUrl.getHost && linkUrl.getRef == null &&
           (subUrlExtensions.exists(u => linkUrl.getPath.endsWith(u)) || !linkUrl.getPath.matches(noExtensionRegx))
       } catch {
         case x:Exception => println(s"skipping invalid url:%s for domain: %s", link, rUrl); false
