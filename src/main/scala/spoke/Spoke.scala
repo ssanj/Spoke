@@ -5,10 +5,15 @@ import scala.concurrent.duration._
 import scala.concurrent.Future
 
 import scala.util.{Failure, Success}
-import spoke.Elements.{HtmlElement, getElementSummary}
+import spoke.Elements.{Anchor, HtmlElement, getElementSummary}
 import spoke.Report.{PageReport, LinkError, LinkReport}
+import java.net.URL
 
 trait Spoke extends FutureWork {
+
+  type FailureOrReport[R] = Either[Throwable, PageReport[R]]
+
+  val subUrlExtensions = Seq(".html", ".htm", "/")
 
   private def collectLinkReports[R](results:Seq[FutureResult[HtmlElement, R]]):Seq[LinkReport[R]] = {
     results.collect { case FutureResult(el, Success(value)) => LinkReport(el, value) }
@@ -33,9 +38,9 @@ trait Spoke extends FutureWork {
    *         @see PageReport
    */
   def checks[R](urls:Seq[String], f:HtmlElement => Future[R], pred:R => Boolean, options:CheckOptions = CheckOptions()):
-    Seq[Either[Throwable, PageReport[R]]] = urls.map(u => check[R](u, f, pred, options))
+    Seq[FailureOrReport[R]] = urls.map(u => check[R](u, f, pred, options))
 
-  private def check[R](url:String, f:HtmlElement => Future[R], pred:R => Boolean, options:CheckOptions): Either[Throwable, PageReport[R]] = {
+  private def check[R](url:String, f:HtmlElement => Future[R], pred:R => Boolean, options:CheckOptions): FailureOrReport[R] = {
     println(s"processing [$url]")
     val summary = getElementSummary(url, options.removeDupes)
 
@@ -53,5 +58,42 @@ trait Spoke extends FutureWork {
       println(s"processed [$url]")
       Right(PageReport[R](url, statusSuccess, statusOther, errors))
     })
+  }
+
+  def checkSite[R](url:String, f:HtmlElement => Future[R], pred:R => Boolean, options:CheckOptions): Seq[FailureOrReport[R]] = {
+
+    def doCheck(checked:Set[String], toCheck:Set[String]):Set[FailureOrReport[R]] = {
+      if (toCheck.isEmpty) {
+        Set.empty[FailureOrReport[R]]
+      } else {
+        val results:Set[FailureOrReport[R]] = toCheck.map(check[R](_, f, pred, options))
+        results.flatMap(r => filterSublinks(checked, toCheck, r))
+      }
+    }
+
+    def filterSublinks(checked:Set[String], toCheck:Set[String], fr:FailureOrReport[R]):Set[FailureOrReport[R]] = {
+       fr.fold(x => Set(Left(x)), report => {
+         val checked1 = checked + report.url
+         val toCheck1 = report.statusSuccess.collect {
+           case LinkReport(Anchor(_, link), _) if validSubUrl(report.url, link) => link
+         }.toSet.filterNot(checked1.contains)
+         doCheck(checked1, toCheck1) + Right(report)
+       })
+    }
+
+    def validSubUrl(rUrl:String, link:String): Boolean = {
+      try {
+        val reportUrl = new URL(rUrl)
+        val linkUrl = new URL(link)
+        val noExtensionRegx = "^.+\\.[^.]*$"
+
+        reportUrl.getHost == linkUrl.getHost &&
+          (subUrlExtensions.exists(u => linkUrl.getPath.endsWith(u)) || !linkUrl.getPath.matches(noExtensionRegx))
+      } catch {
+        case x:Exception => println(s"skipping invalid url:%s for domain: %s", link, rUrl); false
+      }
+    }
+
+    doCheck(Set.empty[String], Set(url)).toSeq
   }
 }
