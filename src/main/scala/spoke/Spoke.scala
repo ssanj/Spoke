@@ -13,6 +13,8 @@ trait Spoke extends FutureWork {
 
   type FailureOrReport[R] = Either[Throwable, PageReport[R]]
 
+  case class PageCheck[R](results:Set[FailureOrReport[R]], visited:Set[String], unvisited:Set[String])
+
   val subUrlExtensions = Seq(".html", ".htm", "/")
 
   private def collectLinkReports[R](results:Seq[FutureResult[HtmlElement, R]]):Seq[LinkReport[R]] = {
@@ -62,24 +64,31 @@ trait Spoke extends FutureWork {
 
   def checkSite[R](url:String, f:HtmlElement => Future[R], pred:R => Boolean, options:CheckOptions): Seq[FailureOrReport[R]] = {
 
-    def doCheck(checked:Set[String], toCheck:Set[String]):Set[FailureOrReport[R]] = {
-      if (toCheck.isEmpty) {
-        Set.empty[FailureOrReport[R]]
+    def doCheck(pageCheck:PageCheck[R]):PageCheck[R] = {
+      println(s"--- checkedPages:${pageCheck.visited}, unCheckedPages:${pageCheck.unvisited} ---")
+      if (pageCheck.unvisited.isEmpty) {
+        pageCheck
       } else {
-        val results:Set[FailureOrReport[R]] = toCheck.map(check[R](_, f, pred, options))
-        results.flatMap(r => filterSublinks(checked, toCheck, r))
+        val results:Set[FailureOrReport[R]] = pageCheck.unvisited.map(check[R](_, f, pred, options))
+        results.foldLeft(pageCheck) { (acc, fr) =>
+          fr.fold(x =>  acc.copy(results = results + Left(x)) , report => {
+            if (!acc.visited.contains(report.url)) {
+              val subPages = findSubPages(report)
+              val visitedPages = acc.visited + report.url
+              val unvisitedPages = subPages.filterNot(visitedPages.contains)
+              doCheck(PageCheck(pageCheck.results + Right(report), visitedPages, unvisitedPages))
+            } else {
+              pageCheck
+            }
+          })
+        }
       }
     }
 
-    def filterSublinks(checked:Set[String], toCheck:Set[String], fr:FailureOrReport[R]):Set[FailureOrReport[R]] = {
-       fr.fold(x => Set(Left(x)), report => {
-         val checked1 = checked + report.url
-         val toCheck1 = report.statusSuccess.collect {
-           case LinkReport(Anchor(_, link), _) if validSubUrl(report.url, link) => link
-         }.toSet.filterNot(checked1.contains)
-         doCheck(checked1, toCheck1) + Right(report)
-       })
-    }
+    def findSubPages(report:PageReport[R]):Set[String] =
+      report.statusSuccess.collect {
+        case LinkReport(Anchor(_, link), _) if validSubUrl(report.url, link) => link
+      }.toSet
 
     def validSubUrl(rUrl:String, link:String): Boolean = {
       try {
@@ -94,6 +103,6 @@ trait Spoke extends FutureWork {
       }
     }
 
-    doCheck(Set.empty[String], Set(url)).toSeq
+    doCheck(PageCheck(Set.empty[FailureOrReport[R]], Set.empty[String], Set(url))).results.toSeq
   }
 }
